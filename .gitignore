@@ -1,0 +1,37 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.secrets/
+*.pem
+*.key
+*.p12
+*.log
+.idea/
+.vscode/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.tsbuildinfo
+.venv/
+node_modules/
+dist/
+build/
+.cache/
+coverage/
+
+# The BPI 2019 source file is 695 MiB and must be downloaded from 4TU.
+data/raw/*
+!data/raw/.gitkeep
+data/artifacts/*
+!data/artifacts/.gitkeep
+
+# Runtime state
+mlruns/
+postgres-data/
+temporal-data/

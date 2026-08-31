@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<log xmlns="http://www.xes-standard.org/" xes.version="1.0" xes.features="nested-attributes">
+  <extension name="Concept" prefix="concept" uri="http://www.xes-standard.org/concept.xesext"/>
+  <extension name="Time" prefix="time" uri="http://www.xes-standard.org/time.xesext"/>
+  <extension name="Organizational" prefix="org" uri="http://www.xes-standard.org/org.xesext"/>
+  <trace>
+    <string key="concept:name" value="4500000010_00010"/>
+    <string key="Purchasing Document" value="4500000010"/>
+    <string key="Item" value="00010"/>
+    <string key="Item Type" value="Standard"/>
+    <boolean key="GR-Based Inv. Verif." value="true"/>
+    <boolean key="Goods Receipt" value="true"/>
+    <string key="Source" value="source_1"/>
+    <string key="Company" value="company_1"/>
+    <string key="Vendor" value="vendor_1"/>
+    <string key="Item Category" value="3-way match"/>
+    <event>
+      <string key="concept:name" value="Create Purchase Order Item"/>
+      <date key="time:timestamp" value="2018-01-02T08:00:00.000+00:00"/>
+      <string key="org:resource" value="user_1"/>
+    </event>
+    <event>
+      <string key="concept:name" value="Record Goods Receipt"/>
+      <date key="time:timestamp" value="2018-01-08T09:30:00.000+00:00"/>
+      <string key="org:resource" value="user_2"/>
+    </event>
+    <event>
+      <string key="concept:name" value="Clear Invoice"/>
+      <date key="time:timestamp" value="2018-01-10T10:00:00.000+00:00"/>
+      <string key="org:resource" value="batch_1"/>
+    </event>
+  </trace>
+  <trace>
+    <string key="concept:name" value="4500000020_00020"/>
+    <string key="Purchasing Document" value="4500000020"/>
+    <string key="Item" value="00020"/>
+    <string key="Item Type" value="Standard"/>
+    <boolean key="GR-Based Inv. Verif." value="false"/>
+    <boolean key="Goods Receipt" value="false"/>
+    <string key="Source" value="source_1"/>
+    <string key="Company" value="company_2"/>
+    <string key="Vendor" value="vendor_2"/>
+    <string key="Item Category" value="2-way match"/>
+    <event>
+      <string key="concept:name" value="Create Purchase Order Item"/>
+      <date key="time:timestamp" value="2018-02-01T08:00:00Z"/>
+      <string key="org:resource" value="user_3"/>
+    </event>
+    <event>
+      <string key="concept:name" value="Vendor creates invoice"/>
+      <date key="time:timestamp" value="2018-02-20T12:15:00Z"/>
+    </event>
+  </trace>
+</log>

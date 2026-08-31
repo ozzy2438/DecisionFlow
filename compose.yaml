@@ -1,0 +1,234 @@
+name: decisionflow
+
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: decisionflow
+      POSTGRES_USER: decisionflow
+      POSTGRES_PASSWORD: decisionflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decisionflow -d decisionflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: tools
+    environment:
+      DECISIONFLOW_DATABASE_URL: postgresql+psycopg://decisionflow:decisionflow@postgres:5432/decisionflow
+      DECISIONFLOW_MLFLOW_TRACKING_URI: http://mlflow:5000
+      DECISIONFLOW_ORCHESTRATION_MODE: direct
+      TEST_DATABASE_URL: postgresql+psycopg://decisionflow:decisionflow@postgres:5432/decisionflow_test
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: mlflow-runtime
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --workers
+      - "2"
+      - --allowed-hosts
+      - mlflow,mlflow:5000,localhost,127.0.0.1
+      - --backend-store-uri
+      - postgresql+psycopg2://decisionflow:decisionflow@postgres:5432/mlflow
+      - --artifacts-destination
+      - /mlartifacts
+      - --serve-artifacts
+    volumes:
+      - mlflow-artifacts:/mlartifacts
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:5000/health')
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:1.29.7
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: decisionflow
+      POSTGRES_PWD: decisionflow
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:7233:7233"
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:2.53.3
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:${DECISIONFLOW_UI_PORT:-18766}
+    depends_on:
+      temporal:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${DECISIONFLOW_TEMPORAL_UI_PORT:-18767}:8080"
+    restart: unless-stopped
+
+  bootstrap:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: tools
+    command:
+      - /bin/sh
+      - -ec
+      - alembic upgrade head && exec decisionflow bootstrap
+    environment:
+      DECISIONFLOW_DATABASE_URL: postgresql+psycopg://decisionflow:decisionflow@postgres:5432/decisionflow
+      DECISIONFLOW_MLFLOW_TRACKING_URI: http://mlflow:5000
+      DECISIONFLOW_MLFLOW_EXPERIMENT: decisionflow-sla-risk
+      DECISIONFLOW_MLFLOW_MODEL_NAME: decisionflow-sla-risk
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    command:
+      - /bin/sh
+      - -c
+      - alembic upgrade head && exec uvicorn decisionflow.api:app --host 0.0.0.0 --port 8000
+    environment: &application-environment
+      DECISIONFLOW_ENVIRONMENT: development
+      DECISIONFLOW_DATABASE_URL: postgresql+psycopg://decisionflow:decisionflow@postgres:5432/decisionflow
+      DECISIONFLOW_MLFLOW_TRACKING_URI: http://mlflow:5000
+      DECISIONFLOW_MLFLOW_MODEL_NAME: decisionflow-sla-risk
+      DECISIONFLOW_MLFLOW_MODEL_ALIAS: candidate
+      DECISIONFLOW_TEMPORAL_ADDRESS: temporal:7233
+      DECISIONFLOW_TEMPORAL_NAMESPACE: default
+      DECISIONFLOW_TEMPORAL_TASK_QUEUE: decisionflow-p2p
+      DECISIONFLOW_ORCHESTRATION_MODE: temporal
+      DECISIONFLOW_LLM_PROVIDER: ${DECISIONFLOW_LLM_PROVIDER:-template}
+      DECISIONFLOW_LLM_MODEL: ${DECISIONFLOW_LLM_MODEL:-gpt-5.6}
+      # Deliberately require an explicit project-prefixed secret. Do not inherit a broad host key.
+      DECISIONFLOW_OPENAI_API_KEY: ${DECISIONFLOW_OPENAI_API_KEY:-}
+      DECISIONFLOW_AUTH_TOKENS_JSON: >-
+        {"operator-local-demo-key":{"actor_id":"operator-demo","roles":["operator"]},
+        "approver-local-demo-key":{"actor_id":"approver-demo","roles":["approver"]},
+        "auditor-local-demo-key":{"actor_id":"auditor-demo","roles":["auditor"]}}
+      DECISIONFLOW_CORS_ORIGINS: http://localhost:${DECISIONFLOW_UI_PORT:-18766}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${DECISIONFLOW_API_PORT:-18765}:8000"
+    init: true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${DECISIONFLOW_UI_PORT:-18766}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    command: ["python", "-m", "decisionflow.temporal_worker"]
+    environment: *application-environment
+    init: true
+    depends_on:
+      api:
+        condition: service_healthy
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v3.14.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/decisionflow-alerts.yml:/etc/prometheus/decisionflow-alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${DECISIONFLOW_PROMETHEUS_PORT:-18768}:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mlflow-artifacts:
+  postgres-data:
+  prometheus-data:

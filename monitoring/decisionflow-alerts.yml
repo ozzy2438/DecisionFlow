@@ -1,0 +1,26 @@
+groups:
+  - name: decisionflow
+    rules:
+      - alert: DecisionFlowApiUnavailable
+        expr: up{job="decisionflow-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: DecisionFlow API metrics target is unavailable
+
+      - alert: DecisionFlowServerErrors
+        expr: sum(rate(decisionflow_http_requests_total{status=~"5.."}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: DecisionFlow is returning sustained server errors
+
+      - alert: DecisionFlowHighP95Latency
+        expr: histogram_quantile(0.95, sum by (le) (rate(decisionflow_http_request_duration_seconds_bucket[5m]))) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: DecisionFlow p95 API latency exceeds five seconds

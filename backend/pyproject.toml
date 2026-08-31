@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "decisionflow"
+version = "0.1.0"
+description = "Governed Purchase-to-Pay Decision Twin"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic==1.19.1",
+  "fastapi==0.141.1",
+  "lightgbm==4.7.0",
+  "lxml==6.1.2",
+  "mlflow==3.15.2",
+  "numpy==2.5.2",
+  "openai==3.6.0",
+  "pandas==2.3.3",
+  "pm4py==2.7.23.6",
+  "psycopg[binary]==3.3.4",
+  "psycopg2-binary==2.9.12",
+  "pydantic==2.13.5",
+  "pydantic-settings==2.15.0",
+  "prometheus-client==0.26.0",
+  "scikit-learn==1.9.0",
+  "sqlalchemy==2.0.52",
+  "temporalio==1.32.0",
+  "uvicorn[standard]==0.52.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "lxml-stubs==0.5.1",
+  "mypy==2.3.1",
+  "pandas-stubs==2.3.3.260113",
+  "pytest==9.1.1",
+  "pytest-cov==7.0.0",
+  "ruff==0.16.5",
+]
+
+[project.scripts]
+decisionflow = "decisionflow.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/decisionflow"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+markers = [
+  "integration: requires a PostgreSQL test database",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["decisionflow"]
+omit = ["*/decisionflow/models.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["decisionflow"]
+
+[[tool.mypy.overrides]]
+module = ["pm4py", "pm4py.*", "sklearn", "sklearn.*"]
+ignore_missing_imports = true
