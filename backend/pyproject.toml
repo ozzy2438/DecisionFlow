@@ -18,7 +18,7 @@ dependencies = [
   "openai==3.6.0",
   "pandas==2.3.3",
   "pm4py==2.7.23.6",
-  "psycopg[binary]==3.3.4",
+  "psycopg[binary]==3.3.5",
   "psycopg2-binary==2.9.12",
   "pydantic==2.13.5",
   "pydantic-settings==2.15.0",
